@@ -1,0 +1,34 @@
+<html>
+    <title>Pandas Cribsheet</title>
+<head>
+</head>
+
+<body>
+
+<article>
+    <h3>Split string column</h3>
+    <code><pre>temp = electoralDF['State']
+temp = temp.str.split('\t')
+states = temp.str.get(0)     
+states = states.str.strip()</pre></code>
+</article>
+
+<article>
+    <h3>Select Rows with NaN(Null values)</h3>
+    <code><pre>df[df['Votes'].isnull()]</pre></code>
+</article>
+
+<article>
+    <h3>Convert series from string to numeric</h3>
+    <code><pre>votes = temp.str.get(1)
+votes = votes.fillna(value=0)
+votes = to_numeric(votes)</pre></code>
+</article>
+
+<article>
+    <h3>Remove a column from a data frame</h3>
+    <code><pre>del electoralDF['Number of Electoral Votes']</pre></code>
+</article>
+
+</body>
+</html>
