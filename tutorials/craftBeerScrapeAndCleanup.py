@@ -47,6 +47,18 @@ def get_all_beers(html_soup):
         }
 
         yield beer_entry
+        
+def stringPrctToFloat(value):
+    try:
+        return float(value.strip('%')) / 100
+    except ValueError:
+        return None
+        
+def stringToInt(value):
+    try:
+        return int(value)
+    except ValueError:
+        return None
 
     
 # To be polite.  I'm going to dump this data into a csv and have 
@@ -68,6 +80,60 @@ csvFile = 'beerData.csv'
         # writer.writerow(beer)
         
 df = pd.read_csv(csvFile)
+
+breweries = df[["brewery_location", "brewery_name"]]
+breweries = breweries.drop_duplicates()
+
+# After drop_duplicates the indices in brewery are the index values for
+# the first occurence of each brewery. i.e. 0, 6, 19, 24, 30, etc.  
+# reset_index(drop=True) gives you a basic 1, 2, 3, ... index
+breweries = breweries.reset_index(drop=True)
+
+# Copy index into a column
+breweries["id"] = breweries.index
+
+# Join the two data frames
+beers = pd.merge(
+    df,
+    breweries,
+    left_on=["brewery_name", "brewery_location"],
+    right_on=["brewery_name", "brewery_location"],
+    sort=True,  # sort according to join columns
+    # suffixes to add to disambiguate column names (the id columns from the
+    # two dataframes in this case
+    suffixes=('_beer', '_brewery') 
+)
+
+# Extract certain columns
+beers = beers[["abv", "ibu", "id_beer", "name", "size", "style", "id_brewery"]]
+
+# rename the 
+beers.rename(
+    inplace=True, 
+    columns={
+        "id_beer": "id",
+        "id_brewery": "brewery_id"
+    }
+)
+
+# Split the brewery_location column in two and create two new columns
+breweries["city"] = breweries["brewery_location"].apply(
+    lambda location: location.split(",")[0])
+breweries["state"] = breweries["brewery_location"].apply(
+    lambda location: location.split(",")[1])
+
+# Drop brewery_location column.  Rename brewery_name to name 
+breweries = breweries[["brewery_name", "city", "state"]]
+breweries.rename(inplace=True, columns={"brewery_name": "name"})
+
+
+beers['abv'] = beers['abv'].apply(stringPrctToFloat)
+beers['ibu'] = beers['ibu'].apply(stringToInt)
+
+
+
+
+
 
 
 
