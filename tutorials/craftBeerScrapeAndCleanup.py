@@ -59,6 +59,13 @@ def stringToInt(value):
         return int(value)
     except ValueError:
         return None
+        
+def extract_ounces(value):
+    match = re.match("(\d{1,2}\.*\d*)", value)
+    if match is None:
+        return None
+    return float(match.group(0))
+
 
     
 # To be polite.  I'm going to dump this data into a csv and have 
@@ -129,6 +136,9 @@ breweries.rename(inplace=True, columns={"brewery_name": "name"})
 
 beers['abv'] = beers['abv'].apply(stringPrctToFloat)
 beers['ibu'] = beers['ibu'].apply(stringToInt)
+beers['ounces'] = beers['size'].apply(extract_ounces)
+del beers['size']
+
 
 
 
