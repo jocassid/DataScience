@@ -2,84 +2,35 @@
 
 from collections import Counter
 from csv import DictReader, DictWriter
-from re import compile
+from re import compile as re_compile
 from string import ascii_letters
 from sys import stderr
 
 from nltk import word_tokenize
 
-from HtmlOutput import HtmlOutput
-from spellcheck import contains_digits, CrudeWordList, SpellChecker
+from spellcheck import contains_digits, Dictionary, SpellChecker
 
-# This isn't an exhaustive list
-MANUFACTURERS = set([
-    'Aerospatiale', 'Aerostar', 'Agusta',
-    'Airbus', 'Airspeed', 'Armstrong-Whitworth',
-    'Antonov', 'Arado', 'Arava',
-    'Armstrong Whitworth', 'Avro', 'BAC',
-    'Beech', 'Beechcraft', 'Bell',
-    'Breguet', 'Boeing', 'Bristol',
-    'British Aerospace', 'Britten-Norman', 'CASA',
-    'Canadair', 'Cessna', 'Consolidated', 'Convair',
-    'Curtiss', 'Curtiss-Wright', 'Dassault', 'De Havilland',
-    'Dornier', 'Douglas', 'Embraer', 'Eurocopter',
-    'Farman', 'Fairchild', 'Fokker', 'Ford', 'Grumman', 'Handley Page',
-    'Hawker',
-    'Hawker Siddeley', 'Junkers', 'Ilyushin', 'Latecoere', 'Learjet', 'Let',
-    'Lockheed', 'McDonnell Douglas', 'North American', 'Piper', 'Rockwell',
-    'Saab',
-    'Savoia Marchetti', 'Short', 'Sikorsky', 'Sud Aviation',
-    'Swearingen', 'Tupolev', 'Vickers', 'Yakovlev', 'Zeppelin'])
+class ModelNumberClassifier(object):
+    pass
 
+class CrashDataCleaner(object):
 
-word_list = CrudeWordList()
-word_list.load_from_file('word_list.txt')
-spellChecker = SpellChecker(word_list)
+    FIELD_ORDER = ['Number', 'collisionWith', 'Date', 'Time', 'Location',
+        'Military', 'Operator', 'Manufacturer', 'Type', 'Variant',
+        'category', 'Aboard', 'Fatalities', 'Ground', 'Route', 'Summary']
 
-class Row(object):
-    def __init__(self):
-        self.csv_row = None
-        self.type = None
-        self.manufacturer = None
-        self.number = None
-        self.summary = None
-        self.collision_with = None
-        self.operator = None
-        self.military = False
-        self.date = None
-        self.time = None
-        self.location = None
+    digit_regex = re_compile(r'\d')
 
-    def from_dict(self, a_dict):
-        self.csv_row = a_dict
-        self.type = a_dict['Type']
-        self.summary = a_dict['Summary']
-        self.operator = a_dict['Operator']
-        self.military = a_dict.get('Military', False)
-        self.date = a_dict['Date']
-        self.collision_with = a_dict.get('collisionWith', None)
-        self.time = a_dict['Time']
-        self.location = a_dict['Location']
+    def __init__(
+            self, 
+            spellchecker):
+        self.row_counter = 0
+        self.spellchecker = spellchecker
 
-    def to_dict(self):
-        return {
-            'Number': self.number,
-            'Type': self.type,
-            'Summary': self.summary,
-            'Operator': self.operator,
-            'Military': self.military,
-            'Date': self.date,
-            'collisionWith': self.collision_with,
-            'Time': self.time,
-            'Location': self.location,
-        }
-
-    def __str__(self):
-        return "{}: {}".format(self.number, self.to_dict())
-
-    def is_collision(self):
-        summary = self.summary.lower()
-        if '/' not in self.type:
+    @staticmethod
+    def is_collision(row):
+        summary = row.get('Summary', '').lower()
+        if '/' not in row.get('Type', ''):
             return False
         if 'collision' in summary:
             return True
@@ -87,57 +38,88 @@ class Row(object):
             return True
         return False
 
+    def split_collision_rows(self, row_generator):
+        """Determines if the Row is for a collision and splits the row in two"""
+        for row in row_generator:
+            if self.is_collision(row):
+                yield row
+                yield self.split_collision_row(row)                           
+            yield row
+
     @staticmethod
     def split_value(value):
+        pieces = value.split('/')
+        pieces_length = len(pieces)
+        if pieces_length == 1:
+            return value, value
+        if pieces_length == 2:
+            return pieces[0], pieces[1]
+        
+                    
+            
+            
+            return value, value
         if str(value).count('/') == 1:
             pieces = value.split('/')
-            return pieces[0], pieces[1]
+            
         return value, value
 
-    def split_collision_row(self):
-        new_row = Row()
-
-        new_row.csv_row = self.csv_row
-        new_row.summary = self.summary
-
-        new_row.type, self.type = Row.split_value(self.type)
-        new_row.operator, self.operator = Row.split_value(self.operator)
-
-        new_row.number = self.number + 1
-
-        self.collision_with = new_row.number
-        new_row.collision_with = self.number
-
+    def split_collision_row(self, row_in):
+        
+        type1, type2 = self.split_value(row_in['Type'])
+        operator1, operator2 = self.split_value(row_in['Operator'])
+        
+        new_row_number = self.next_row_number() 
+        new_row = {
+            'Number': new_row_number,
+            'summary': row_in['Summary'],
+            'Type': type2,
+            'Operator': operator2,
+            'CollisionWith': row_in['Number']
+        
+        }
+        
+        row_in['Type'] = type1
+        row_in['Operator'] = type2
+        row_in['CollisionWith'] = new_row_number
         return new_row
 
-    def clean(self):
-        if self.operator.startswith('Military - '):
-            self.military = True
-            self.operator = self.operator.replace('Military - ', '')
-        self.get_manufacturer_and_type()
+    def clean(self, row):
+        operator = row.get('Operator', '')
+        if operator.startswith('Military - '):
+            row['Military'] = True
+            row['Operator'] = operator.replace('Military - ', '')
+        row = self.get_manufacturer_and_type(row)
+        return row
 
     def get_words(self, text):
         for word in word_tokenize(text):
             if '/' not in word:
                 yield word
+                continue
             for i, piece in enumerate(word.split('/')):
                 yield piece
                 if i > 0:
                     yield '/'
 
-    def get_manufacturer_and_type(self):
+    def get_manufacturer_and_type(self, row_in):
 
-        aircraft_type = self.type.strip()
+        aircraft_type = row_in['Type'].strip()
+        print('aircraft_type:', aircraft_type)
         if aircraft_type.endswith(' (airship)'):
             aircraft_type = aircraft_type[:-10]
 
         words = []
-        for word in self.get_words(aircraft_type):
-            if contains_digits(word):
-                words.append(word)
+        for word_in in self.get_words(aircraft_type):
+            if contains_digits(word_in):
+                words.append(word_in)
                 continue
-            words.append(spellChecker.check_and_replace(word))
-            break
+            word_out = self.spellchecker.check(word_in)
+            words.append(word_out)
+            
+        
+
+            # words.append(spellChecker.check_and_replace(word))
             #print("words", words)
 
         # manufacturer = None
@@ -149,67 +131,59 @@ class Row(object):
         # if manufacturer is None:
             # # print('No manufacturer found in {}'.format(aircraft_type), file=stderr)
             # pass
-# 
+            #
         # self.type = aircraft_type
         # self.manufacturer = manufacturer
+        return row_in
 
+    def next_row_number(self):
+        next = self.row_counter
+        self.row_counter += 1
+        return next
 
-def rows_from_csv(csv_path):
-    """Generator returns Row objects from csv"""
-    with open(csv_path, 'r') as csv_file:
+    def rows_from_csv(self, csv_file):
+        """Generator returns Row objects from csv"""
         reader = DictReader(csv_file)
         for csv_row in reader:
-            row = Row()
-            row.from_dict(csv_row)
-            yield row
+            csv_row['Number'] = self.next_row_number()
+            yield csv_row
 
-def split_collision_rows(row_generator):
-    """Determines if the Row is for a collision and splits the row in two"""
-    i = -1
-    for row in row_generator:
-        i += 1
-        row.number = i
-        # print(row)
+    def run(self, input_filepath, output_filepath):
+        with open(input_filepath, 'r') as csv_in, \
+                open(output_filepath, 'w') as csv_out:
 
-        if not row.is_collision():
-            yield row
-            continue
+            self.row_counter = 0
+            fieldnames = self.FIELD_ORDER \
+                + ['Registration', 'Flight #', 'cn/In']
 
-        new_row = row.split_collision_row()
-        i += 1
+            # Setup writer
+            csvWriter = DictWriter(csv_out, fieldnames=fieldnames)
+            csvWriter.writeheader()
+            
+            for i, row in enumerate(
+                    self.split_collision_rows(
+                        self.rows_from_csv(csv_in))):
+                if i > 0:
+                    print('=' * 80)
+                print("IN  {0:> 4}: {1}".format(i, row))
+                print('-' * 80)
+                row = self.clean(row)
+                print("OUT {0:> 4}: {1}".format(i, row))
+                    
 
-        yield row
-        yield new_row
 
+        #for i, row in enumerate(
+                #CrashDataCleaner.split_collision_rows(
+                    #rows_from_csv(csv_in)
+                #)
+            #):
+            #print("row before:", row)
+            #cleaner.clean(row)
+            #print("row after:", row)
+            #if i > -1:
+                #break
+            #csvWriter.writerow(row.to_dict())
 
-def main():
-
-    FIELD_ORDER = ['Number', 'collisionWith', 'Date', 'Time', 'Location',
-        'Military', 'Operator', 'Manufacturer', 'Type', 'Variant',
-        'category', 'Aboard', 'Fatalities', 'Ground', 'Route', 'Summary']
-
-    with open('cleansedCrashData.html', 'w') as htmlOutFile, \
-            open('cleansedCrashData.csv', 'w') as csvOutFile:
-
-        csvWriter = DictWriter(
-            csvOutFile,
-            fieldnames=FIELD_ORDER + ['Registration', 'Flight #', 'cn/In'])
-        csvWriter.writeheader()
-
-        htmlOut = HtmlOutput(FIELD_ORDER)
-        htmlOut.setFile(htmlOutFile)
-
-    
-        for i, row in enumerate(
-                split_collision_rows(
-                    rows_from_csv('crashData.csv'))):
-            row.clean()
-            if i > -1:
-                break
-            htmlOut.write(row.to_dict())
-            csvWriter.writerow(row.to_dict())
-
-        htmlOut.finish()
 
         # word_freq = Counter()
         #
@@ -231,8 +205,12 @@ def main():
                 # freq_file.write('{},{}\n'.format(freq, word))
 
 
-
-
-
 if __name__ == '__main__':
-    main()
+    with Dictionary('aircraft.sqlite') as dictionary:
+        print('dictionary is', dictionary)
+        spellchecker = SpellChecker(dictionary, True) 
+        cleaner = CrashDataCleaner(spellchecker)
+        cleaner.run(
+            'crashData.csv',
+            'cleansedCrashData.csv',
+        )
