@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from argparse import ArgumentParser
 from collections import Counter
 from csv import DictReader, DictWriter
 from re import compile as re_compile
@@ -204,13 +205,25 @@ class CrashDataCleaner(object):
             # for word, freq in word_freq.items():
                 # freq_file.write('{},{}\n'.format(freq, word))
 
+def main(args):
+    # with Dictionary('aircraft.sqlite') as dictionary:
+        # print('dictionary is', dictionary)
+        # spellchecker = SpellChecker(dictionary, True) 
+        # cleaner = CrashDataCleaner(spellchecker)
+        # cleaner.run(
+            # 'crashData.csv',
+            # 'cleansedCrashData.csv',
+        # )
 
 if __name__ == '__main__':
-    with Dictionary('aircraft.sqlite') as dictionary:
-        print('dictionary is', dictionary)
-        spellchecker = SpellChecker(dictionary, True) 
-        cleaner = CrashDataCleaner(spellchecker)
-        cleaner.run(
-            'crashData.csv',
-            'cleansedCrashData.csv',
-        )
+    parser = ArgumentParser(description='Clean aircraft crash data')
+    parser.add_argument(
+        "input_file",
+        nargs='?',
+        help="Input file.  If not specified data is read from stdin")
+    parser.add_argument(
+        "output_file",
+        nargs='?',
+        help="Output file.  If not specified data is writtend to stdout")
+    main(parser.parse_args())
+
