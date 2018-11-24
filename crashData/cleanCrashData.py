@@ -10,6 +10,8 @@ from sys import stderr
 from nltk import word_tokenize
 
 from spellcheck import contains_digits, Dictionary, SpellChecker
+from subsequence_group import subsequence_group
+
 
 class ModelNumberClassifier(object):
     pass
@@ -111,12 +113,15 @@ class CrashDataCleaner(object):
             aircraft_type = aircraft_type[:-10]
 
         words = []
-        for word_in in self.get_words(aircraft_type):
-            if contains_digits(word_in):
-                words.append(word_in)
+        for word, next_word in subsequence_group(
+                self.get_words(aircraft_type),
+                2):
+            print('word', word, '  next_word', next_word)
+            if contains_digits(word):
+                words.append(word)
                 continue
-            word_out = self.spellchecker.check(word_in)
-            words.append(word_out)
+            word = self.spellchecker.check(word, next_word)
+            words.append(word)
             
         
 
@@ -149,7 +154,7 @@ class CrashDataCleaner(object):
             csv_row['Number'] = self.next_row_number()
             yield csv_row
 
-    def run(self, input_filepath, output_filepath):
+    def run(self, input_filepath, output_filepath, offset=0):
         with open(input_filepath, 'r') as csv_in, \
                 open(output_filepath, 'w') as csv_out:
 
@@ -164,6 +169,8 @@ class CrashDataCleaner(object):
             for i, row in enumerate(
                     self.split_collision_rows(
                         self.rows_from_csv(csv_in))):
+                if i < offset:
+                    continue
                 if i > 0:
                     print('=' * 80)
                 print("IN  {0:> 4}: {1}".format(i, row))
@@ -206,24 +213,28 @@ class CrashDataCleaner(object):
                 # freq_file.write('{},{}\n'.format(freq, word))
 
 def main(args):
-    # with Dictionary('aircraft.sqlite') as dictionary:
-        # print('dictionary is', dictionary)
-        # spellchecker = SpellChecker(dictionary, True) 
-        # cleaner = CrashDataCleaner(spellchecker)
-        # cleaner.run(
-            # 'crashData.csv',
-            # 'cleansedCrashData.csv',
-        # )
+    print('args', args)
+    with Dictionary('aircraft.sqlite') as dictionary:
+        spellchecker = SpellChecker(dictionary, True) 
+        cleaner = CrashDataCleaner(spellchecker)
+        cleaner.run(
+            args.input_file,
+            args.output_file,
+            args.offset,
+        )
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='Clean aircraft crash data')
     parser.add_argument(
+        '-o', '--offset',
+        type=int,
+        default=0,
+        help="start processing at specified record in data file")
+    parser.add_argument(
         "input_file",
-        nargs='?',
-        help="Input file.  If not specified data is read from stdin")
+        help="Input file")
     parser.add_argument(
         "output_file",
-        nargs='?',
-        help="Output file.  If not specified data is writtend to stdout")
+        help="Output file")
     main(parser.parse_args())
 

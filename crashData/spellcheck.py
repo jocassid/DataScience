@@ -196,6 +196,7 @@ class InteractiveReplace(Cmd):
 class SpellChecker:
     
     default_alphabet = ascii_lowercase
+    roman_numeral_characters = set('MCLXVI')
 
     def __init__(
             self, 
@@ -217,6 +218,9 @@ class SpellChecker:
         # splits = list(split_generator(word))
         # splits = [(word[:i], word[i:]) for i in range(len(word) + 1)]
         # #print('{} splits: {}'.format(word, splits))ts))
+        
+    def is_roman_numeral(self, word):
+        return not bool(set(word) - self.roman_numeral_characters)
         
     def find_candidates(self, word, number_candidates=1):
         
@@ -263,7 +267,7 @@ class SpellChecker:
             probability = self.dictionary.probability(candidate)
             yield probability, candidate, None
                 
-    def check(self, word):
+    def check(self, word, next_word):
         new_characters = set(word.lower()) - self.alphabet
         if new_characters:
             self.alphabet |= new_characters
@@ -273,6 +277,8 @@ class SpellChecker:
         if word in self.dictionary:
             self.dictionary.add_occurance(word)
             return word
+        if self.is_roman_numeral(word):
+            return word            
         if self.interactive:
             if self.dictionary.in_skips(word):
                 return word
