@@ -139,6 +139,7 @@ class InteractiveReplace(Cmd):
         self.word_in = word_in
         self.prompt = "'{}': ".format(word_in)
         self.spellchecker = spellchecker
+        self.dictionary = spellchecker.dictionary
         self.candidates = []
         self.page = 0
         self.word_out = None
@@ -146,12 +147,16 @@ class InteractiveReplace(Cmd):
 
     def do_add(self, arg):
         """Add word to dictionary"""
-        if not self.spellchecker.dictionary.add(self.word_in):
+        if not self.dictionary.add(self.word_in):
             raise RuntimeError(
                 "Unable to add {} to dictionary".format(self.word_in))
         self.word_out = self.word_in
         self.action = 'add'
         return True
+
+    @staticmethod
+    def get_input(prompt):
+        return input(prompt)
 
     def do_list(self, arg):
         """List possible candidates"""
@@ -162,7 +167,7 @@ class InteractiveReplace(Cmd):
             return False
         for i, candidate in enumerate(self.candidates):
             print("{:>4}. {}".format(i+1, candidate))
-        selection = input("select value or press enter: ")
+        selection = self.get_input("select value or press enter: ")
         if not selection:
             return False # stay in command loop
         try:
@@ -175,26 +180,45 @@ class InteractiveReplace(Cmd):
         
             
     def do_skip(self, arg):
-        self.spellchecker.dictionary.add_skip(self.word_in)
+        self.dictionary.add_skip(self.word_in)
         self.word_out = None
         self.action = 'skip'
         return True
         
+    def correct(self, word_out):        
+        self.word_out = word_out
+        self.action = 'correct'
+        return True
+        
     def do_change(self, arg):
+        print("In do_change arg is {}".format(arg))
         while True:
             if arg and arg[0]:
                 word_out = arg[0]
             else:
-                word_out = input('Enter change: ')
-            confirm = input("Change '{}' to '{}' (y/n): ".format(
+                word_out = self.get_input('Enter change: ')
+            confirm = self.get_input("Change '{}' to '{}'? (y/n): ".format(
                 self.word_in, 
                 word_out))
             if confirm.lower() == 'y':
                 break
-        self.spellchecker.dictionary.add(word_out)
-        self.word_out = word_out
-        self.action = 'correct'
-        return True
+        words = word_out.split()
+        if len(words) == 1:
+            self.dictionary.add(word_out)
+            return self.correct(word_out)
+            
+        confirm = self.get_input("Treat '{}' as {} words? (y/n):" \
+            .format(word_out, len(words)))
+        if confirm.lower() != 'y':
+            self.dictionary.add(word_out)
+            return self.correct(word_out)
+            
+        for word in words:
+            self.dictionary.add(word)
+        return self.correct(word_out)
+            
+            
+            
         
 
 class SpellChecker:
@@ -325,14 +349,15 @@ class SpellChecker:
             word, next_word = word_buffer
             word_buffer.pop(0)
         
-            word = self.check(word, next_word)
-            if word is not None:
-                yield word
+            word_or_words = self.check(word, next_word)
+            if word_or_words is not None:
+                yield word_or_words
 
         # process the last word in the buffer
-        word = self.check(word_buffer[0])
-        if word is not None:
-            yield word
+        if word_buffer:
+            word_or_words = self.check(word_buffer[0])
+            if word_or_words is not None:
+                yield word_or_words
             
     def interactive_replace(self, word):
         cmd = InteractiveReplace(word, self)

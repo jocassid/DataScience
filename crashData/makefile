@@ -1,9 +1,12 @@
 
-all: scrub
+all: cleansedCrashData.csv
 
 clean:
 	rm cleansedCrashData.csv
-	rm cleansedCrashData.html
 
-scrub: crashData.csv
-	./cleanCrashData.py
+cleansedCrashData.csv: crashData.csv 
+	./cleanCrashData.py crashData.csv cleansedCrashData.csv
+
+test:
+	pytest test_spellcheck.py
+

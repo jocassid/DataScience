@@ -198,6 +198,12 @@ class TestSpellChecker(object):
         }
         assert expected == set(candidates)
         
+    def test_check_text(self, spell_checker):
+        spellchecker = SpellChecker(Dictionary(':memory:'), interactive=True)
+        text_in = ' Havilland F-60 FarmanGoliath'
+        text_out = "".join(spellchecker.check_text(text_in, Tokenizer()))    
+        assert 'Havilland F-60 Farman Goliath' == text_out
+
                 
 def test_tokenize():
     tokenizer = Tokenizer()
