@@ -9,9 +9,11 @@ from statistics import mean
 from string import ascii_lowercase, punctuation
 from sys import stderr
 
-from nltk import word_tokenize
+# from nltk import word_tokenize
 
 from dictionary import Dictionary
+from tokenizer import Tokenizer
+from subsequence_group import subsequence_group
 
 
 PUNCTUATION = set(punctuation)
@@ -27,6 +29,8 @@ def validate_word(word):
 
 
 def contains_digits(text):
+    if not text:
+        return False
     for c in text:
         if c.isdigit():
             return True
@@ -209,6 +213,7 @@ class SpellChecker:
         self.alphabet = set(alphabet)
         self.words_not_found = Counter()
         self.skips = set()
+        self.skip_next = False
 
     @staticmethod
     def one_edit_away(word):
@@ -223,7 +228,7 @@ class SpellChecker:
         return not bool(set(word) - self.roman_numeral_characters)
         
     def find_candidates(self, word, number_candidates=1):
-        
+        """yields a tuple of probability, word1, word2"""        
         for candidate in inserts_generator(word, self.alphabet):
             if candidate not in self.dictionary:
                 continue
@@ -267,23 +272,67 @@ class SpellChecker:
             probability = self.dictionary.probability(candidate)
             yield probability, candidate, None
                 
-    def check(self, word, next_word):
+    def check(self, word, next_word=None):
+        
+        if self.skip_next:
+            self.skip_next = False
+            return None
+            
+        if not word:
+            return word
+            
         new_characters = set(word.lower()) - self.alphabet
         if new_characters:
             self.alphabet |= new_characters
             
         if word in PUNCTUATION:
             return word
+            
         if word in self.dictionary:
             self.dictionary.add_occurance(word)
             return word
+        
+        if next_word is not None:
+            combined = word + next_word
+            if combined in self.dictionary:
+                self.dictionary.add_occurance(combined)
+                return combined
+            
         if self.is_roman_numeral(word):
-            return word            
+            return word
+            
         if self.interactive:
             if self.dictionary.in_skips(word):
                 return word
             return self.interactive_replace(word)
+            
         return self.automatic_replace(word)
+
+    def check_text(self, text_in, tokenizer):
+        word_buffer = []
+        for token in tokenizer.tokenize(text_in):
+            if not token.isalpha():
+                yield token
+                continue
+                
+            if len(word_buffer) < 2:
+                word_buffer.append(token)
+                
+                # at this point there are either 1 or 2 words in the buffer
+                if len(word_buffer) < 2:
+                    continue
+                
+            word, next_word = word_buffer
+            word_buffer.pop(0)
+        
+            word = self.check(word, next_word)
+            if word is not None:
+                yield word
+
+        # process the last word in the buffer
+        word = self.check(word_buffer[0])
+        if word is not None:
+            yield word
             
     def interactive_replace(self, word):
         cmd = InteractiveReplace(word, self)

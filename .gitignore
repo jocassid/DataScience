@@ -1,7 +1,10 @@
-
 bin/
 lib/
-lib64/
+# lib64 is a symbolic link to directory so treat as file
 lib64
+share/
 *~
 pyvenv.cfg
+*.marks
+**/.pytest_cache
+**/__pycache__

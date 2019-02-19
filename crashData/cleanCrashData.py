@@ -11,6 +11,7 @@ from nltk import word_tokenize
 
 from spellcheck import contains_digits, Dictionary, SpellChecker
 from subsequence_group import subsequence_group
+from tokenizer import Tokenizer
 
 
 class ModelNumberClassifier(object):
@@ -29,7 +30,8 @@ class CrashDataCleaner(object):
             spellchecker):
         self.row_counter = 0
         self.spellchecker = spellchecker
-
+        self.tokenizer = Tokenizer(hyphen_continues_word=True)
+                                                                     
     @staticmethod
     def is_collision(row):
         summary = row.get('Summary', '').lower()
@@ -95,52 +97,23 @@ class CrashDataCleaner(object):
         row = self.get_manufacturer_and_type(row)
         return row
 
-    def get_words(self, text):
-        for word in word_tokenize(text):
-            if '/' not in word:
-                yield word
-                continue
-            for i, piece in enumerate(word.split('/')):
-                yield piece
-                if i > 0:
-                    yield '/'
 
-    def get_manufacturer_and_type(self, row_in):
 
-        aircraft_type = row_in['Type'].strip()
+    def get_manufacturer_and_type(self, row):
+
+        aircraft_type = row['Type'].strip()
         print('aircraft_type:', aircraft_type)
         if aircraft_type.endswith(' (airship)'):
             aircraft_type = aircraft_type[:-10]
-
-        words = []
-        for word, next_word in subsequence_group(
-                self.get_words(aircraft_type),
-                2):
-            print('word', word, '  next_word', next_word)
-            if contains_digits(word):
-                words.append(word)
-                continue
-            word = self.spellchecker.check(word, next_word)
-            words.append(word)
             
-        
+        row['Type'] = "".join(
+            self.spellchecker.check_text(
+                aircraft_type,
+                self.tokenizer
+            )
+        )
 
-            # words.append(spellChecker.check_and_replace(word))
-            #print("words", words)
-
-        # manufacturer = None
-        # for mfr in MANUFACTURERS:
-            # if aircraft_type.lower().startswith(mfr.lower()):
-                # manufacturer = mfr
-                # aircraft_type = aircraft_type[len(mfr):].strip()
-                # break
-        # if manufacturer is None:
-            # # print('No manufacturer found in {}'.format(aircraft_type), file=stderr)
-            # pass
-            #
-        # self.type = aircraft_type
-        # self.manufacturer = manufacturer
-        return row_in
+        return row
 
     def next_row_number(self):
         next = self.row_counter
