@@ -333,6 +333,9 @@ class SpellChecker:
         return self.automatic_replace(word)
 
     def check_text(self, text_in, tokenizer):
+        """
+        This method yields a series of tokens (words, punctuation, etc)
+        """
         word_buffer = []
         for token in tokenizer.tokenize(text_in):
             if not token.isalpha():
