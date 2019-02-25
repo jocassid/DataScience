@@ -8,3 +8,4 @@ pyvenv.cfg
 *.marks
 **/.pytest_cache
 **/__pycache__
+OhioSchools/.ipynb_checkpoints/
